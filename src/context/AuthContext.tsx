@@ -38,40 +38,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         country: 'USA',
         role: 'admin',
       }
-    } else if (email === 'paris@hotel.com') {
-      newUser = {
-        id: 'mgr_paris',
-        name: 'Paris Manager',
-        email,
-        phone: '+33 1 42 68 53 00',
-        address: 'Rue Cambon',
-        city: 'Paris',
-        country: 'France',
-        role: 'manager',
-        managedBranchId: 'h1',
-      }
-    } else if (email === 'dubai@hotel.com') {
-      newUser = {
-        id: 'mgr_dubai',
-        name: 'Dubai Manager',
-        email,
-        phone: '+971 4 301 7777',
-        address: 'Jumeirah 1',
-        city: 'Dubai',
-        country: 'UAE',
-        role: 'manager',
-        managedBranchId: 'h2',
-      }
     } else {
-      newUser = {
-        id: `user_${Date.now()}`,
-        name: 'John Customer',
-        email,
-        phone: '+1 (555) 123-4567',
-        address: '123 Guest St',
-        city: 'San Francisco',
-        country: 'USA',
-        role: 'customer',
+      const savedManagers = localStorage.getItem('app_managers')
+      const managersList = savedManagers ? JSON.parse(savedManagers) : [
+        { email: 'paris@hotel.com', name: 'Paris Manager', branchId: 'h1' },
+        { email: 'dubai@hotel.com', name: 'Dubai Manager', branchId: 'h2' }
+      ]
+      const matchedManager = managersList.find((m: any) => m.email.toLowerCase() === email.toLowerCase())
+
+      if (matchedManager) {
+        newUser = {
+          id: `mgr_${matchedManager.branchId}`,
+          name: matchedManager.name,
+          email,
+          phone: '+1 (555) 000-0000',
+          address: '',
+          city: '',
+          country: '',
+          role: 'manager',
+          managedBranchId: matchedManager.branchId,
+        }
+      } else {
+        newUser = {
+          id: `user_${Date.now()}`,
+          name: 'John Customer',
+          email,
+          phone: '+1 (555) 123-4567',
+          address: '123 Guest St',
+          city: 'San Francisco',
+          country: 'USA',
+          role: 'customer',
+        }
       }
     }
 

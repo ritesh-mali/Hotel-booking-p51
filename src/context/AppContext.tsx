@@ -32,7 +32,11 @@ interface AppContextType {
   hotels: Hotel[]
   bookings: Booking[]
   payments: Payment[]
-  addHotel: (hotelData: Omit<Hotel, 'id' | 'rooms' | 'rating' | 'reviewCount' | 'pricePerNight'>) => void
+  addHotel: (
+    hotelData: Omit<Hotel, 'id' | 'rooms' | 'rating' | 'reviewCount' | 'pricePerNight'>,
+    managerName: string,
+    managerEmail: string
+  ) => void
   updateHotel: (id: string, updatedData: Partial<Hotel>) => void
   deleteHotel: (id: string) => void
   addRoom: (hotelId: string, roomData: Omit<Room, 'id' | 'hotelId'>) => void
@@ -141,16 +145,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('app_payments', JSON.stringify(payments))
   }, [payments])
 
-  const addHotel = (hotelData: Omit<Hotel, 'id' | 'rooms' | 'rating' | 'reviewCount' | 'pricePerNight'>) => {
+  const addHotel = (
+    hotelData: Omit<Hotel, 'id' | 'rooms' | 'rating' | 'reviewCount' | 'pricePerNight'>,
+    managerName: string,
+    managerEmail: string
+  ) => {
+    const newId = `h${Date.now()}`
     const newHotel: Hotel = {
       ...hotelData,
-      id: `h${Date.now()}`,
+      id: newId,
       rating: 4.5,
       reviewCount: 0,
       pricePerNight: 0,
       rooms: [],
     }
     setHotels((prev) => [...prev, newHotel])
+
+    // Save manager credentials dynamically to localstorage
+    const savedManagers = localStorage.getItem('app_managers')
+    const managersList = savedManagers ? JSON.parse(savedManagers) : [
+      { email: 'paris@hotel.com', name: 'Paris Manager', branchId: 'h1' },
+      { email: 'dubai@hotel.com', name: 'Dubai Manager', branchId: 'h2' }
+    ]
+    managersList.push({
+      email: managerEmail,
+      name: managerName,
+      branchId: newId,
+    })
+    localStorage.setItem('app_managers', JSON.stringify(managersList))
   }
 
   const updateHotel = (id: string, updatedData: Partial<Hotel>) => {
@@ -161,8 +183,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteHotel = (id: string) => {
     setHotels((prev) => prev.filter((h) => h.id !== id))
-    // Clean up bookings and payments for deleted hotel branches
     setBookings((prev) => prev.filter((b) => b.hotelId !== id))
+
+    // Remove manager credentials dynamically
+    const savedManagers = localStorage.getItem('app_managers')
+    if (savedManagers) {
+      const managersList = JSON.parse(savedManagers)
+      const updated = managersList.filter((m: any) => m.branchId !== id)
+      localStorage.setItem('app_managers', JSON.stringify(updated))
+    }
   }
 
   const addRoom = (hotelId: string, roomData: Omit<Room, 'id' | 'hotelId'>) => {

@@ -47,6 +47,8 @@ export default function AdminDashboard() {
     description: '',
     amenities: '',
     image: '',
+    managerName: '',
+    managerEmail: '',
   })
 
   const [roomForm, setRoomForm] = useState({
@@ -150,24 +152,48 @@ export default function AdminDashboard() {
         amenities: amenitiesArr,
         image: imgUrl,
       })
+
+      // Update manager credentials as well
+      const savedManagers = localStorage.getItem('app_managers')
+      if (savedManagers) {
+        const managersList = JSON.parse(savedManagers)
+        const updated = managersList.map((m: any) =>
+          m.branchId === editingBranch.id
+            ? { ...m, name: branchForm.managerName, email: branchForm.managerEmail }
+            : m
+        )
+        localStorage.setItem('app_managers', JSON.stringify(updated))
+      }
+
       setEditingBranch(null)
     } else {
-      addHotel({
-        name: branchForm.name,
-        city: branchForm.city,
-        country: branchForm.country,
-        address: branchForm.address,
-        description: branchForm.description,
-        amenities: amenitiesArr,
-        image: imgUrl,
-      })
+      addHotel(
+        {
+          name: branchForm.name,
+          city: branchForm.city,
+          country: branchForm.country,
+          address: branchForm.address,
+          description: branchForm.description,
+          amenities: amenitiesArr,
+          image: imgUrl,
+        },
+        branchForm.managerName,
+        branchForm.managerEmail
+      )
     }
 
-    setBranchForm({ name: '', city: '', country: '', address: '', description: '', amenities: '', image: '' })
+    setBranchForm({ name: '', city: '', country: '', address: '', description: '', amenities: '', image: '', managerName: '', managerEmail: '' })
     setBranchModalOpen(false)
   }
 
   const handleBranchEdit = (branch: HotelType) => {
+    const savedManagers = localStorage.getItem('app_managers')
+    const managersList = savedManagers ? JSON.parse(savedManagers) : [
+      { email: 'paris@hotel.com', name: 'Paris Manager', branchId: 'h1' },
+      { email: 'dubai@hotel.com', name: 'Dubai Manager', branchId: 'h2' }
+    ]
+    const mgr = managersList.find((m: any) => m.branchId === branch.id)
+
     setEditingBranch(branch)
     setBranchForm({
       name: branch.name,
@@ -177,6 +203,8 @@ export default function AdminDashboard() {
       description: branch.description,
       amenities: branch.amenities.join(', '),
       image: branch.image,
+      managerName: mgr ? mgr.name : '',
+      managerEmail: mgr ? mgr.email : '',
     })
     setBranchModalOpen(true)
   }
@@ -416,7 +444,7 @@ export default function AdminDashboard() {
                   <button
                     onClick={() => {
                       setEditingBranch(null)
-                      setBranchForm({ name: '', city: '', country: '', address: '', description: '', amenities: '', image: '' })
+                      setBranchForm({ name: '', city: '', country: '', address: '', description: '', amenities: '', image: '', managerName: '', managerEmail: '' })
                       setBranchModalOpen(true)
                     }}
                     className="flex items-center gap-1.5 bg-primary text-primary-foreground px-4 py-2 text-xs font-bold rounded-lg hover:bg-primary/95 transition cursor-pointer"
@@ -803,6 +831,30 @@ export default function AdminDashboard() {
               placeholder="https://..."
               className="w-full px-4 py-2 border border-border bg-background rounded-lg focus:outline-none"
             />
+          </div>
+          <div className="grid grid-cols-2 gap-4 border-t border-border pt-4">
+            <div>
+              <label className="block text-muted-foreground uppercase mb-1.5">Manager Name</label>
+              <input
+                type="text"
+                value={branchForm.managerName}
+                onChange={(e) => setBranchForm({ ...branchForm, managerName: e.target.value })}
+                placeholder="E.g. Marcus Aurelius"
+                className="w-full px-4 py-2 border border-border bg-background rounded-lg focus:outline-none"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-muted-foreground uppercase mb-1.5">Manager Email (Login)</label>
+              <input
+                type="email"
+                value={branchForm.managerEmail}
+                onChange={(e) => setBranchForm({ ...branchForm, managerEmail: e.target.value })}
+                placeholder="E.g. rome@hotel.com"
+                className="w-full px-4 py-2 border border-border bg-background rounded-lg focus:outline-none"
+                required
+              />
+            </div>
           </div>
           <button
             type="submit"

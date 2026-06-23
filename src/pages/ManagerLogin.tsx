@@ -18,8 +18,13 @@ export default function ManagerLogin() {
     setError('')
     setLoading(true)
 
-    // Verify manager credentials
-    if (email !== 'paris@hotel.com' && email !== 'dubai@hotel.com') {
+    const savedManagers = localStorage.getItem('app_managers')
+    const managersList = savedManagers ? JSON.parse(savedManagers) : [
+      { email: 'paris@hotel.com', name: 'Paris Manager', branchId: 'h1' },
+      { email: 'dubai@hotel.com', name: 'Dubai Manager', branchId: 'h2' }
+    ]
+    const matched = managersList.some((m: any) => m.email.toLowerCase() === email.toLowerCase())
+    if (!matched) {
       setError('Access Denied. Branch Manager credentials required.')
       setLoading(false)
       return
