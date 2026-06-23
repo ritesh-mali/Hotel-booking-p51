@@ -6,6 +6,8 @@ export interface User {
   address: string
   city: string
   country: string
+  role?: 'customer' | 'admin' | 'manager'
+  managedBranchId?: string
   createdAt?: string
 }
 

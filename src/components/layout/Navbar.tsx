@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X, LogOut, LogIn, User, Sun, Moon } from 'lucide-react'
+import { Menu, X, LogOut, LogIn, User, Sun, Moon, Hotel, Bed, GitCompare } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
 export default function Navbar() {
@@ -27,58 +27,97 @@ export default function Navbar() {
 
   const isActive = (path: string) => location.pathname === path
 
+  const getDashboardLink = () => {
+    if (!user) return '/dashboard'
+    if (user.role === 'admin') return '/admin/dashboard'
+    if (user.role === 'manager') return '/manager/dashboard'
+    return '/dashboard'
+  }
+
   return (
-    <nav className="sticky top-0 z-50 bg-background border-b border-border shadow-sm">
+    <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-xl">H</span>
+            <div className="w-10 h-10 bg-gradient-to-br from-primary to-blue-800 rounded-lg flex items-center justify-center shadow-md shadow-primary/20">
+              <span className="text-white font-bold text-xl">A</span>
             </div>
-            <span className="font-bold text-xl text-foreground hidden sm:block group-hover:text-primary transition">
-              Luxury Hotels
-            </span>
+            <div className="flex flex-col">
+              <span className="font-bold text-lg leading-tight text-foreground group-hover:text-primary transition">
+                Aura Resorts
+              </span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-widest leading-none font-semibold">
+                Luxury Stays
+              </span>
+            </div>
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden md:flex items-center gap-6">
             <Link
               to="/"
-              className={`transition ${
-                isActive('/') ? 'text-primary font-semibold' : 'text-foreground hover:text-primary'
+              className={`text-sm transition-colors hover:text-primary ${
+                isActive('/') ? 'text-primary font-semibold' : 'text-muted-foreground'
               }`}
             >
               Home
             </Link>
             <Link
-              to="/hotels"
-              className={`transition ${
-                isActive('/hotels') ? 'text-primary font-semibold' : 'text-foreground hover:text-primary'
+              to="/branches"
+              className={`text-sm transition-colors hover:text-primary ${
+                isActive('/branches') ? 'text-primary font-semibold' : 'text-muted-foreground'
               }`}
             >
-              Hotels
+              Branches
+            </Link>
+            <Link
+              to="/rooms"
+              className={`text-sm transition-colors hover:text-primary ${
+                isActive('/rooms') ? 'text-primary font-semibold' : 'text-muted-foreground'
+              }`}
+            >
+              Rooms
+            </Link>
+            <Link
+              to="/compare"
+              className={`text-sm transition-colors hover:text-primary ${
+                isActive('/compare') ? 'text-primary font-semibold' : 'text-muted-foreground'
+              }`}
+            >
+              Compare
             </Link>
 
-            {isAuthenticated && (
+            {isAuthenticated && user?.role === 'customer' && (
               <Link
                 to="/dashboard"
-                className={`transition ${
-                  isActive('/dashboard') ? 'text-primary font-semibold' : 'text-foreground hover:text-primary'
+                className={`text-sm transition-colors hover:text-primary ${
+                  isActive('/dashboard') ? 'text-primary font-semibold' : 'text-muted-foreground'
                 }`}
               >
                 My Bookings
               </Link>
             )}
 
-            {user?.email === 'admin@example.com' && (
+            {isAuthenticated && user?.role === 'admin' && (
               <Link
-                to="/admin"
-                className={`transition ${
-                  isActive('/admin') ? 'text-primary font-semibold' : 'text-foreground hover:text-primary'
+                to="/admin/dashboard"
+                className={`text-sm transition-colors hover:text-primary ${
+                  location.pathname.startsWith('/admin') ? 'text-primary font-semibold' : 'text-muted-foreground'
                 }`}
               >
-                Admin
+                Admin Panel
+              </Link>
+            )}
+
+            {isAuthenticated && user?.role === 'manager' && (
+              <Link
+                to="/manager/dashboard"
+                className={`text-sm transition-colors hover:text-primary ${
+                  location.pathname.startsWith('/manager') ? 'text-primary font-semibold' : 'text-muted-foreground'
+                }`}
+              >
+                Manager Panel
               </Link>
             )}
           </div>
@@ -88,40 +127,40 @@ export default function Navbar() {
             {/* Theme Toggle */}
             <button
               onClick={toggleDarkMode}
-              className="p-2 rounded-lg hover:bg-muted transition"
+              className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Toggle dark mode"
             >
-              {isDark ? <Sun size={20} /> : <Moon size={20} />}
+              {isDark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
 
             {/* Auth Buttons */}
             {!isAuthenticated ? (
               <div className="hidden sm:flex gap-2">
                 <Link to="/login">
-                  <button className="px-4 py-2 text-foreground hover:text-primary transition flex items-center gap-2">
-                    <LogIn size={18} />
+                  <button className="px-4 py-2 text-sm text-foreground hover:text-primary transition flex items-center gap-1.5 font-medium">
+                    <LogIn size={16} />
                     Login
                   </button>
                 </Link>
                 <Link to="/signup">
-                  <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition">
+                  <button className="px-4 py-2 text-sm bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition shadow-sm hover:shadow-md">
                     Sign Up
                   </button>
                 </Link>
               </div>
             ) : (
               <div className="hidden sm:flex gap-2 items-center">
-                <Link to="/dashboard">
-                  <button className="p-2 rounded-lg hover:bg-muted transition">
-                    <User size={20} />
+                <Link to={getDashboardLink()}>
+                  <button className="p-2 text-muted-foreground hover:text-primary hover:bg-secondary rounded-lg transition-colors" title="My Dashboard">
+                    <User size={18} />
                   </button>
                 </Link>
                 <button
                   onClick={handleLogout}
-                  className="p-2 rounded-lg hover:bg-muted transition"
+                  className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                   title="Logout"
                 >
-                  <LogOut size={20} />
+                  <LogOut size={18} />
                 </button>
               </div>
             )}
@@ -129,69 +168,78 @@ export default function Navbar() {
             {/* Mobile Menu Button */}
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="md:hidden p-2 rounded-lg hover:bg-muted transition"
+              className="md:hidden p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-secondary transition"
             >
-              {isOpen ? <X size={24} /> : <Menu size={24} />}
+              {isOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
           </div>
         </div>
+      </div>
 
-        {/* Mobile Navigation */}
-        {isOpen && (
-          <div className="md:hidden border-t border-border py-4 space-y-2">
-            <Link
-              to="/"
-              onClick={() => setIsOpen(false)}
-              className="block px-4 py-2 rounded-lg hover:bg-muted transition"
-            >
-              Home
-            </Link>
-            <Link
-              to="/hotels"
-              onClick={() => setIsOpen(false)}
-              className="block px-4 py-2 rounded-lg hover:bg-muted transition"
-            >
-              Hotels
-            </Link>
+      {/* Mobile Navigation */}
+      {isOpen && (
+        <div className="md:hidden border-t border-border py-4 px-6 space-y-2 bg-background">
+          <Link
+            to="/"
+            onClick={() => setIsOpen(false)}
+            className="block py-2.5 text-base font-medium rounded-lg hover:bg-secondary px-3 transition"
+          >
+            Home
+          </Link>
+          <Link
+            to="/branches"
+            onClick={() => setIsOpen(false)}
+            className="block py-2.5 text-base font-medium rounded-lg hover:bg-secondary px-3 transition"
+          >
+            Branches
+          </Link>
+          <Link
+            to="/rooms"
+            onClick={() => setIsOpen(false)}
+            className="block py-2.5 text-base font-medium rounded-lg hover:bg-secondary px-3 transition"
+          >
+            Rooms
+          </Link>
+          <Link
+            to="/compare"
+            onClick={() => setIsOpen(false)}
+            className="block py-2.5 text-base font-medium rounded-lg hover:bg-secondary px-3 transition"
+          >
+            Compare Rooms
+          </Link>
 
-            {isAuthenticated && (
+          {isAuthenticated ? (
+            <>
               <Link
-                to="/dashboard"
+                to={getDashboardLink()}
                 onClick={() => setIsOpen(false)}
-                className="block px-4 py-2 rounded-lg hover:bg-muted transition"
+                className="block py-2.5 text-base font-medium rounded-lg hover:bg-secondary px-3 transition"
               >
-                My Bookings
+                Dashboard
               </Link>
-            )}
-
-            {!isAuthenticated ? (
-              <>
-                <Link
-                  to="/login"
-                  onClick={() => setIsOpen(false)}
-                  className="block px-4 py-2 rounded-lg hover:bg-muted transition"
-                >
-                  Login
-                </Link>
-                <Link
-                  to="/signup"
-                  onClick={() => setIsOpen(false)}
-                  className="block px-4 py-2 bg-primary text-primary-foreground rounded-lg"
-                >
-                  Sign Up
-                </Link>
-              </>
-            ) : (
               <button
                 onClick={handleLogout}
-                className="w-full text-left px-4 py-2 rounded-lg hover:bg-muted transition"
+                className="w-full text-left py-2.5 text-base font-medium rounded-lg hover:bg-destructive/10 text-destructive px-3 transition"
               >
                 Logout
               </button>
-            )}
-          </div>
-        )}
-      </div>
+            </>
+          ) : (
+            <div className="pt-4 border-t border-border flex flex-col gap-2">
+              <Link to="/login" onClick={() => setIsOpen(false)} className="w-full">
+                <button className="w-full py-2.5 text-center text-foreground font-medium rounded-lg border border-border hover:bg-secondary transition">
+                  Login
+                </button>
+              </Link>
+              <Link to="/signup" onClick={() => setIsOpen(false)} className="w-full">
+                <button className="w-full py-2.5 text-center bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition">
+                  Sign Up
+                </button>
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
     </nav>
   )
 }

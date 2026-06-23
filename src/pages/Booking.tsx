@@ -1,34 +1,48 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Calendar, User, Mail, Phone, MapPin, CheckCircle } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { Calendar, User, Mail, Phone, ArrowLeft, ShieldAlert } from 'lucide-react'
 import Layout from '../components/layout/Layout'
-import { hotels } from '../data/hotels'
+import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
+import { useBooking } from '../context/BookingContext'
+import { motion } from 'framer-motion'
 
 export default function Booking() {
   const { hotelId, roomId } = useParams()
   const navigate = useNavigate()
-  const { user, isAuthenticated } = useAuth()
-  const [step, setStep] = useState(1)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [bookingComplete, setBookingComplete] = useState(false)
+  const { hotels } = useApp()
+  const { user } = useAuth()
+  const { updateBooking } = useBooking()
 
   const hotel = hotels.find((h) => h.id === hotelId)
   const room = hotel?.rooms.find((r) => r.id === roomId)
 
   const [formData, setFormData] = useState({
-    firstName: user?.name?.split(' ')[0] || '',
-    lastName: user?.name?.split(' ')[1] || '',
+    name: user?.name || '',
     email: user?.email || '',
     phone: user?.phone || '',
-    address: user?.address || '',
     checkInDate: '',
     checkOutDate: '',
     guests: 1,
     specialRequests: '',
-    paymentMethod: 'card',
   })
+
+  // Set dates from search query if any
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const queryCheckIn = params.get('checkIn') || ''
+    const queryCheckOut = params.get('checkOut') || ''
+    const queryGuests = Number(params.get('guests')) || 1
+
+    if (queryCheckIn || queryCheckOut) {
+      setFormData((prev) => ({
+        ...prev,
+        checkInDate: queryCheckIn,
+        checkOutDate: queryCheckOut,
+        guests: queryGuests,
+      }))
+    }
+  }, [])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -39,33 +53,62 @@ export default function Booking() {
     if (!formData.checkInDate || !formData.checkOutDate) return 0
     const checkIn = new Date(formData.checkInDate)
     const checkOut = new Date(formData.checkOutDate)
+    if (checkOut <= checkIn) return 0
     return Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24))
   }
 
   const nights = calculateNights()
-  const totalPrice = room ? room.price * nights : 0
+  const roomSubtotal = room ? room.price * nights : 0
+  const taxes = Math.round(roomSubtotal * 0.15)
+  const totalPrice = roomSubtotal + taxes
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleConfirmBooking = (e: React.FormEvent) => {
     e.preventDefault()
-    setIsSubmitting(true)
+    if (nights <= 0) {
+      alert('Please check your dates. Check-out date must be after Check-in date.')
+      return
+    }
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    // Save pending details into BookingContext
+    updateBooking({
+      hotelId: hotelId || null,
+      roomId: roomId || null,
+      checkInDate: formData.checkInDate,
+      checkOutDate: formData.checkOutDate,
+      guests: formData.guests,
+      selectedHotel: hotel,
+      selectedRoom: room,
+    })
 
-    setIsSubmitting(false)
-    setBookingComplete(true)
+    // Store custom fields in session storage so Payment Page can access them
+    sessionStorage.setItem(
+      'pending_booking_form',
+      JSON.stringify({
+        userName: formData.name,
+        userEmail: formData.email,
+        userPhone: formData.phone,
+        specialRequests: formData.specialRequests,
+        totalPrice,
+        nights,
+        roomSubtotal,
+        taxes,
+      })
+    )
+
+    // Redirect to payment page
+    navigate('/payment')
   }
 
   if (!hotel || !room) {
     return (
       <Layout>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
-          <h1 className="text-4xl font-bold mb-4">Booking Not Found</h1>
+          <h1 className="text-4xl font-bold mb-4 text-destructive">Booking Not Found</h1>
           <button
-            onClick={() => navigate('/hotels')}
+            onClick={() => navigate('/branches')}
             className="bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:bg-primary/90"
           >
-            Back to Hotels
+            Back to Branches
           </button>
         </div>
       </Layout>
@@ -75,361 +118,213 @@ export default function Booking() {
   return (
     <Layout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Booking Form */}
-          <div className="lg:col-span-2">
-            <AnimatePresence mode="wait">
-              {!bookingComplete ? (
-                <motion.div
-                  key="form"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                >
-                  <h1 className="text-4xl font-bold mb-8">Complete Your Booking</h1>
+        {/* Back Link */}
+        <button
+          onClick={() => navigate(`/branches/${hotel.id}`)}
+          className="mb-8 flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition cursor-pointer"
+        >
+          <ArrowLeft size={16} />
+          <span>Back to Branch Details</span>
+        </button>
 
-                  {/* Steps */}
-                  <div className="flex gap-4 mb-8">
-                    {[1, 2, 3].map((s) => (
-                      <div
-                        key={s}
-                        className={`flex-1 h-2 rounded-full transition ${
-                          s <= step ? 'bg-primary' : 'bg-muted'
-                        }`}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Booking form */}
+          <div className="lg:col-span-8">
+            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+              <h1 className="text-3xl font-black">Configure Your Stay</h1>
+              <p className="text-muted-foreground text-sm">Please fill in your details and select check-in/out dates.</p>
+
+              <form onSubmit={handleConfirmBooking} className="bg-card border border-border rounded-2xl p-6 md:p-8 space-y-6 shadow-sm">
+                <h3 className="text-lg font-bold border-b border-border pb-3 flex items-center gap-2">
+                  <User size={18} className="text-primary" />
+                  Guest Details
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Full Name */}
+                  <div>
+                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Full Name</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      placeholder="John Doe"
+                      className="w-full px-4 py-2.5 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                      required
+                    />
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Email Address</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3 text-muted-foreground" size={16} />
+                      <input
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        placeholder="john@example.com"
+                        className="w-full pl-9 pr-4 py-2.5 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                        required
                       />
-                    ))}
-                  </div>
-
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Step 1: Guest Details */}
-                    {step === 1 && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="space-y-6"
-                      >
-                        <h2 className="text-2xl font-bold">Guest Information</h2>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium mb-2">First Name</label>
-                            <input
-                              type="text"
-                              name="firstName"
-                              value={formData.firstName}
-                              onChange={handleInputChange}
-                              className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-2">Last Name</label>
-                            <input
-                              type="text"
-                              name="lastName"
-                              value={formData.lastName}
-                              onChange={handleInputChange}
-                              className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                              required
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium mb-2">Email</label>
-                          <div className="relative">
-                            <Mail className="absolute left-3 top-3 text-muted-foreground" size={20} />
-                            <input
-                              type="email"
-                              name="email"
-                              value={formData.email}
-                              onChange={handleInputChange}
-                              className="w-full pl-10 pr-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                              required
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium mb-2">Phone</label>
-                          <div className="relative">
-                            <Phone className="absolute left-3 top-3 text-muted-foreground" size={20} />
-                            <input
-                              type="tel"
-                              name="phone"
-                              value={formData.phone}
-                              onChange={handleInputChange}
-                              className="w-full pl-10 pr-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                              required
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium mb-2">Address</label>
-                          <div className="relative">
-                            <MapPin className="absolute left-3 top-3 text-muted-foreground" size={20} />
-                            <input
-                              type="text"
-                              name="address"
-                              value={formData.address}
-                              onChange={handleInputChange}
-                              className="w-full pl-10 pr-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                              required
-                            />
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {/* Step 2: Dates & Guests */}
-                    {step === 2 && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="space-y-6"
-                      >
-                        <h2 className="text-2xl font-bold">Select Dates</h2>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium mb-2">Check-in Date</label>
-                            <div className="relative">
-                              <Calendar className="absolute left-3 top-3 text-muted-foreground" size={20} />
-                              <input
-                                type="date"
-                                name="checkInDate"
-                                value={formData.checkInDate}
-                                onChange={handleInputChange}
-                                className="w-full pl-10 pr-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                                required
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-2">Check-out Date</label>
-                            <div className="relative">
-                              <Calendar className="absolute left-3 top-3 text-muted-foreground" size={20} />
-                              <input
-                                type="date"
-                                name="checkOutDate"
-                                value={formData.checkOutDate}
-                                onChange={handleInputChange}
-                                className="w-full pl-10 pr-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                                required
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium mb-2">Number of Guests</label>
-                          <select
-                            name="guests"
-                            value={formData.guests}
-                            onChange={handleInputChange}
-                            className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                          >
-                            {[1, 2, 3, 4, 5, 6].map((num) => (
-                              <option key={num} value={num}>
-                                {num} {num === 1 ? 'Guest' : 'Guests'}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium mb-2">Special Requests</label>
-                          <textarea
-                            name="specialRequests"
-                            value={formData.specialRequests}
-                            onChange={handleInputChange}
-                            placeholder="Any special requests..."
-                            className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                            rows={3}
-                          />
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {/* Step 3: Payment */}
-                    {step === 3 && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="space-y-6"
-                      >
-                        <h2 className="text-2xl font-bold">Payment Method</h2>
-
-                        <div className="space-y-3">
-                          {['card', 'wallet', 'bank'].map((method) => (
-                            <label
-                              key={method}
-                              className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition ${
-                                formData.paymentMethod === method
-                                  ? 'border-primary bg-primary/10'
-                                  : 'border-border hover:border-primary'
-                              }`}
-                            >
-                              <input
-                                type="radio"
-                                name="paymentMethod"
-                                value={method}
-                                checked={formData.paymentMethod === method}
-                                onChange={handleInputChange}
-                                className="w-4 h-4"
-                              />
-                              <span className="ml-3 font-medium capitalize">{method === 'card' ? 'Credit Card' : method === 'wallet' ? 'Digital Wallet' : 'Bank Transfer'}</span>
-                            </label>
-                          ))}
-                        </div>
-
-                        {formData.paymentMethod === 'card' && (
-                          <div className="bg-card p-4 rounded-lg border border-border">
-                            <p className="text-sm text-muted-foreground mb-4">Mock card form (demo only)</p>
-                            <div className="space-y-3">
-                              <input
-                                type="text"
-                                placeholder="4532 1234 5678 9010"
-                                className="w-full px-4 py-2 border border-border rounded-lg"
-                              />
-                              <div className="grid grid-cols-2 gap-3">
-                                <input
-                                  type="text"
-                                  placeholder="MM/YY"
-                                  className="px-4 py-2 border border-border rounded-lg"
-                                />
-                                <input
-                                  type="text"
-                                  placeholder="CVC"
-                                  className="px-4 py-2 border border-border rounded-lg"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </motion.div>
-                    )}
-
-                    {/* Navigation Buttons */}
-                    <div className="flex gap-4 pt-6">
-                      {step > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setStep(step - 1)}
-                          className="px-6 py-3 border border-border rounded-lg hover:bg-muted transition"
-                        >
-                          Back
-                        </button>
-                      )}
-                      {step < 3 ? (
-                        <button
-                          type="button"
-                          onClick={() => setStep(step + 1)}
-                          className="flex-1 bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:bg-primary/90 transition font-semibold"
-                        >
-                          Continue
-                        </button>
-                      ) : (
-                        <button
-                          type="submit"
-                          disabled={isSubmitting}
-                          className="flex-1 bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:bg-primary/90 transition font-semibold disabled:opacity-50"
-                        >
-                          {isSubmitting ? 'Processing...' : 'Complete Booking'}
-                        </button>
-                      )}
                     </div>
-                  </form>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="success"
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="text-center py-12"
-                >
-                  <div className="inline-block p-6 bg-primary/10 rounded-full mb-6">
-                    <CheckCircle className="text-primary" size={64} />
                   </div>
-                  <h2 className="text-4xl font-bold mb-2">Booking Confirmed!</h2>
-                  <p className="text-xl text-muted-foreground mb-8">
-                    Confirmation sent to {formData.email}
-                  </p>
-                  <div className="text-lg mb-8">
-                    <p className="text-muted-foreground">Booking Reference:</p>
-                    <p className="font-bold text-2xl text-primary">BK{Math.random().toString(36).substr(2, 9).toUpperCase()}</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Phone */}
+                  <div>
+                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Phone Number</label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-3 text-muted-foreground" size={16} />
+                      <input
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleInputChange}
+                        placeholder="+1 (555) 000-0000"
+                        className="w-full pl-9 pr-4 py-2.5 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                        required
+                      />
+                    </div>
                   </div>
+
+                  {/* Guests */}
+                  <div>
+                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Number of Guests</label>
+                    <select
+                      name="guests"
+                      value={formData.guests}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2.5 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm appearance-none"
+                    >
+                      {[...Array(room.capacity)].map((_, i) => (
+                        <option key={i + 1} value={i + 1}>
+                          {i + 1} {i + 1 === 1 ? 'Guest' : 'Guests'} (Max {room.capacity})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <h3 className="text-lg font-bold border-b border-border pb-3 flex items-center gap-2 pt-4">
+                  <Calendar size={18} className="text-primary" />
+                  Select Dates
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Check-In */}
+                  <div>
+                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Check-In Date</label>
+                    <input
+                      type="date"
+                      name="checkInDate"
+                      value={formData.checkInDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2.5 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                      required
+                    />
+                  </div>
+
+                  {/* Check-Out */}
+                  <div>
+                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Check-Out Date</label>
+                    <input
+                      type="date"
+                      name="checkOutDate"
+                      value={formData.checkOutDate}
+                      min={formData.checkInDate || new Date().toISOString().split('T')[0]}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2.5 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Special Requests */}
+                <div>
+                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Special Requests (Optional)</label>
+                  <textarea
+                    name="specialRequests"
+                    value={formData.specialRequests}
+                    onChange={handleInputChange}
+                    placeholder="E.g. Extra pillows, airport shuttle request, high floor, early check-in details..."
+                    className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm resize-none"
+                    rows={4}
+                  />
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-4 pt-6 border-t border-border">
                   <button
-                    onClick={() => navigate('/')}
-                    className="bg-primary text-primary-foreground px-8 py-3 rounded-lg hover:bg-primary/90"
+                    type="button"
+                    onClick={() => navigate(`/branches/${hotel.id}`)}
+                    className="flex-1 py-3 border border-border rounded-lg hover:bg-secondary transition font-semibold text-sm cursor-pointer text-center"
                   >
-                    Back to Home
+                    Cancel
                   </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/95 transition text-sm cursor-pointer shadow-md"
+                  >
+                    Confirm Booking
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </div>
 
-          {/* Summary Card */}
-          <div className="lg:col-span-1">
-            <div className="bg-card rounded-xl p-6 border border-border sticky top-20 h-fit">
-              <h3 className="text-2xl font-bold mb-6">Booking Summary</h3>
+          {/* Booking Summary Card */}
+          <div className="lg:col-span-4">
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm sticky top-24 space-y-6">
+              <h3 className="text-xl font-bold">Booking Details</h3>
 
-              {/* Hotel Info */}
-              <div className="mb-6 pb-6 border-b border-border">
-                <img src={hotel.image} alt={hotel.name} className="w-full h-40 object-cover rounded-lg mb-4" />
-                <h4 className="font-bold text-lg">{hotel.name}</h4>
-                <p className="text-sm text-muted-foreground">{hotel.city}, {hotel.country}</p>
-              </div>
-
-              {/* Room Info */}
-              <div className="mb-6 pb-6 border-b border-border">
-                <p className="text-sm text-muted-foreground mb-2">Room</p>
-                <p className="font-bold text-lg">{room.name}</p>
-              </div>
-
-              {/* Dates */}
-              <div className="mb-6 pb-6 border-b border-border">
-                <p className="text-sm text-muted-foreground mb-2">Dates</p>
-                <p className="font-bold">
-                  {formData.checkInDate && formData.checkOutDate
-                    ? `${nights} ${nights === 1 ? 'night' : 'nights'}`
-                    : 'Select dates'}
-                </p>
+              {/* Branch & Room Info */}
+              <div className="pb-6 border-b border-border space-y-4">
+                <img
+                  src={room.image}
+                  alt={room.name}
+                  className="w-full h-40 object-cover rounded-xl shadow-sm"
+                />
+                <div>
+                  <h4 className="font-extrabold text-base leading-tight">{room.name}</h4>
+                  <p className="text-xs text-primary font-bold mt-1 uppercase tracking-wider">
+                    {hotel.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {hotel.city}, {hotel.country}
+                  </p>
+                </div>
               </div>
 
               {/* Price Breakdown */}
-              <div className="space-y-2 mb-6 pb-6 border-b border-border">
+              <div className="space-y-3 pb-6 border-b border-border text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">
                     ${room.price} × {nights || 0} {nights === 1 ? 'night' : 'nights'}
                   </span>
-                  <span className="font-semibold">${room.price * (nights || 0)}</span>
+                  <span className="font-semibold">${roomSubtotal}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Taxes & Fees</span>
-                  <span className="font-semibold">${Math.round(totalPrice * 0.15)}</span>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Taxes & Fees (15%)</span>
+                  <span className="font-semibold">${taxes}</span>
                 </div>
               </div>
 
               {/* Total */}
-              <div className="flex justify-between mb-6 text-2xl font-bold">
-                <span>Total</span>
-                <span className="text-primary">${Math.round(totalPrice * 1.15)}</span>
+              <div className="flex justify-between items-center text-xl font-extrabold">
+                <span>Total Cost</span>
+                <span className="text-primary">${totalPrice}</span>
               </div>
 
-              <button
-                onClick={() => {
-                  if (step === 3 && bookingComplete === false) {
-                    handleSubmit({ preventDefault: () => {} } as any)
-                  }
-                }}
-                disabled={isSubmitting}
-                className="w-full bg-primary text-primary-foreground py-3 rounded-lg hover:bg-primary/90 transition font-semibold disabled:opacity-50"
-              >
-                {isSubmitting ? 'Processing...' : 'Book Now'}
-              </button>
+              {/* Booking safety tip */}
+              <div className="flex gap-2.5 p-3.5 bg-secondary/50 rounded-xl border border-border text-xs text-muted-foreground">
+                <ShieldAlert size={16} className="text-primary shrink-0" />
+                <span>By confirming, you proceed to safe payment options. Cancellation is subject to room policies.</span>
+              </div>
             </div>
           </div>
         </div>
